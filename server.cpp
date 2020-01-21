@@ -1,68 +1,70 @@
+//Windows VC++ での　TCP/IP サンプルプログラム（ここからサーバー）
+//クライアントから送られてきた文字列を大文字に変換して送り返す
+//サーバープログラムを実行してからクライアントプログラムを実行して下さい
+
 #include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
- 
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#define PORT 5000 //クライアントプログラムとポート番号を合わせてください
+
 int main() {
-    int sockfd;
-    int client_sockfd;
-    struct sockaddr_in addr;
- 
-    socklen_t len = sizeof( struct sockaddr_in );
-    struct sockaddr_in from_addr;
- 
-    char buf[1024];
- 
-    // 受信バッファ初期化
-    memset( buf, 0, sizeof( buf ) );
- 
-    // ソケット生成
-    if( ( sockfd = socket( AF_INET, SOCK_STREAM, 0 ) ) < 0 ) {
-        perror( "socket" );
-    }
- 
-    // 待ち受け用IP・ポート番号設定
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons( 1234 );
-    addr.sin_addr.s_addr = INADDR_ANY;
- 
-    // バインド
-    if( bind( sockfd, (struct sockaddr *)&addr, sizeof( addr ) ) < 0 ) {
-        perror( "bind" );
-    }
- 
-    // 受信待ち
-    if( listen( sockfd, SOMAXCONN ) < 0 ) {
-        perror( "listen" );
-    }
- 
-    // クライアントからのコネクト要求待ち
-    if( ( client_sockfd = accept( sockfd, (struct sockaddr *)&from_addr, &len ) ) < 0 ) {
-        perror( "accept" );
-    }
- 
-    // 受信
-    int rsize;
-    while( 1 ) {
-        rsize = recv( client_sockfd, buf, sizeof( buf ), 0 );
- 
-        if ( rsize == 0 ) {
-            break;
-        } else if ( rsize == -1 ) {
-            perror( "recv" );
-        } else {
-            printf( "receive:%s\n", buf );
-            sleep( 1 );
- 
-           
-        }
-    }
- 
-    // ソケットクローズ
-    close( client_sockfd );
-    close( sockfd );
- 
-    return 0;
+	int i;
+	// ポート番号，ソケット
+	int srcSocket;  // 自分
+	int dstSocket;  // 相手
+
+					// sockaddr_in 構造体
+	struct sockaddr_in srcAddr;
+	struct sockaddr_in dstAddr;
+	int dstAddrSize = sizeof(dstAddr);
+	int status;
+	// 各種パラメータ
+	int numrcv;
+	char buffer[1024];
+
+	// Windows の場合
+	WSADATA data;
+	WSAStartup(MAKEWORD(2, 0), &data);
+	// sockaddr_in 構造体のセット
+	memset(&srcAddr, 0, sizeof(srcAddr));
+	srcAddr.sin_port = htons(PORT);
+	srcAddr.sin_family = AF_INET;
+	srcAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	// ソケットの生成（ストリーム型）
+	srcSocket = socket(AF_INET, SOCK_STREAM, 0);
+	// ソケットのバインド
+	bind(srcSocket, (struct sockaddr *) &srcAddr, sizeof(srcAddr));
+	// 接続の許可
+	listen(srcSocket, 1);
+
+	while (1) { //ループで回すことによって何度でもクライアントからつなぐことができる
+
+				// 接続の受付け
+		printf("接続を待っています\nクライアントプログラムを動かしてください\n");
+		dstSocket = accept(srcSocket, (struct sockaddr *) &dstAddr, &dstAddrSize);
+	//	printf("%s から接続を受けました\n", inet_ntoa(dstAddr.sin_addr));
+
+		while (1) {
+			//パケットの受信
+			numrcv = recv(dstSocket, buffer, sizeof(char) * 1024, 0);
+			if (numrcv == 0 || numrcv == -1) {
+				status = closesocket(dstSocket); break;
+			}
+			printf("変換前 %s", buffer);
+			for (i = 0; i< numrcv; i++) { // bufの中の小文字を大文字に変換
+										  //if(isalpha(buffer[i])) 
+				buffer[i] = toupper(buffer[i]);
+			}
+			// パケットの送信
+			send(dstSocket, buffer, sizeof(char) * 1024, 0);
+			printf("→ 変換後 %s \n", buffer);
+		}
+	}
+	// Windows での終了設定
+	WSACleanup();
+
+	return(0);
 }
+
